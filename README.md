@@ -1,4 +1,4 @@
-# Alex1BC — Your Camera. Your Movement.
+# Alex1BC - Your Camera. Your Movement.
 
 > 🌐 **Live Web Introduction, 3D Simulator & Single-File Downloads:**  
 > **👉 [https://alex1a67.github.io/Alex1BC/](https://alex1a67.github.io/Alex1BC/) 👈**
