@@ -3,6 +3,10 @@
 > 🌐 **Live Web Introduction, 3D Simulator & Single-File Downloads:**  
 > **👉 [https://alex1a67.github.io/Alex1BC/](https://alex1a67.github.io/Alex1BC/) 👈**
 
+<p align="center">
+  <img src="assets/alex1bc-demo.gif" alt="Alex1BC Live Tracking Demonstration" width="620" />
+</p>
+
 ---
 
 ### 💡 Important Note for Users & 3D Artists
@@ -13,6 +17,19 @@ Simply open the live website link above:
 * 📱 **Download the Android App (.apk)** (for your phone)
 * 🎮 **Interactive 3D Camera Simulator** (test camera controls right in your browser)
 * 📖 **Step-by-Step Visual Tutorial** (complete guide for Wi-Fi and USB setup)
+
+---
+
+## 📸 Production Features & Workflow
+
+<p align="center">
+  <img src="assets/alex1bc-workflow-diagram.png" alt="Alex1BC Production Workflow Diagram" width="100%" />
+</p>
+
+| Blender 5.1 N-Panel & Viewport | Android Mobile Studio Controller |
+|:---:|:---:|
+| <img src="assets/blender-ui-screenshot.png" alt="Blender UI Screenshot" width="480" /> | <img src="assets/android-app-screenshot.png" alt="Android App Controller Screenshot" width="240" /> |
+| **Blender 5.1 Add-on Sidebar**<br>Instant QR code pairing, active TLS server,<br>control mode selection, and non-destructive take recording | **Native Android App (Jetpack Compose)**<br>Artificial horizon gyro reticle, dual thumbsticks for dolly/crane,<br>cinema prime focal rack (18-135mm), and REC transport |
 
 ---
 
@@ -62,6 +79,7 @@ Plug your phone in via USB cable, enable USB Debugging, and click **Enable USB r
 | **Blender Add-on** | `addon/alex1bc/` | Python server, QR pairing, camera rig math, take manager |
 | **Android Native App** | `android/` | Kotlin + Jetpack Compose app source (Android Studio) |
 | **Web Introduction Site** | `website/` | Three.js 3D interactive showcase, simulator, and downloads |
+| **Visual Assets** | `assets/` | High-res UI screenshots, diagrams, and animated GIF demo |
 | **Automated Tests** | `tests/` | Unit tests & headless Blender 5.1 integration suite |
 | **Build Tools** | `tools/build.py` | Packages add-on ZIP and APK into distributions |
 
