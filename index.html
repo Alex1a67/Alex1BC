@@ -1,0 +1,1884 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
+<title>Alex1BC — Next-Gen Physical Camera Rig for Blender</title>
+<meta name="description" content="Turn your phone into a physical cinema camera rig for Blender. 6-DOF gyro tracking, dual joysticks, focal zoom, action takes, and dense keyframe baking.">
+<meta name="theme-color" content="#06090e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='%2306090e' stroke='%232575fc' stroke-width='6'/%3E%3Ccircle cx='50' cy='50' r='24' fill='none' stroke='%2300d2ff' stroke-width='4' stroke-dasharray='6 4'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23ea7600'/%3E%3C/svg%3E">
+
+<style>
+:root {
+  --bg: #06090e;
+  --bg2: #0c121d;
+  --surf: #131b29;
+  --surf2: #192437;
+  --border: rgba(64, 150, 255, 0.16);
+  --border-bright: rgba(0, 210, 255, 0.4);
+  --blue: #2575fc;
+  --bright: #00d2ff;
+  --orange: #ea7600;
+  --orange-bright: #ff9d3b;
+  --rec: #ff334b;
+  --ok: #00ff9d;
+  --text: #f3f7fc;
+  --text2: #9db0c9;
+  --text3: #62758e;
+  --mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; background: var(--bg); color: var(--text); }
+body {
+  font: 400 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  background: var(--bg);
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(37, 117, 252, 0.18), transparent),
+    radial-gradient(circle 600px at 85% 30%, rgba(0, 210, 255, 0.06), transparent),
+    radial-gradient(circle 500px at 15% 70%, rgba(234, 118, 0, 0.05), transparent);
+}
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, h4 { line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; }
+h1 { font-size: clamp(48px, 9vw, 130px); }
+h2 { font-size: clamp(32px, 5vw, 58px); }
+h3 { font-size: clamp(20px, 2.5vw, 26px); }
+
+.wrap { width: min(1200px, 100% - 48px); margin: 0 auto; position: relative; }
+section { position: relative; padding: 140px 0; z-index: 2; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px;
+  background: rgba(37, 117, 252, 0.14); border: 1px solid var(--border-bright);
+  font: 600 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--bright);
+}
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.badge.orange { background: rgba(234, 118, 0, 0.14); border-color: rgba(234, 118, 0, 0.4); color: var(--orange-bright); }
+.badge.orange .dot { background: var(--orange); box-shadow: 0 0 10px var(--orange); }
+
+.eyebrow {
+  display: flex; align-items: center; gap: 12px;
+  font: 700 12px/1 var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--bright);
+  margin-bottom: 18px;
+}
+.eyebrow::before { content: ""; width: 28px; height: 2px; background: linear-gradient(90deg, var(--bright), transparent); }
+.lead { color: var(--text2); font-size: clamp(17px, 1.8vw, 21px); max-width: 62ch; margin-top: 22px; line-height: 1.6; }
+
+/* 3D background stage */
+#stage {
+  position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1;
+  pointer-events: auto; cursor: grab;
+}
+#stage:active { cursor: grabbing; }
+
+/* top progress line */
+#progress-bar {
+  position: fixed; top: 0; left: 0; height: 3px; width: 100%;
+  transform-origin: 0 50%; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--blue), var(--bright), var(--orange));
+  z-index: 100;
+}
+
+/* 3D stage interaction hint */
+.stage-hint {
+  position: fixed; bottom: 24px; right: 28px; z-index: 10;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; border-radius: 999px;
+  background: rgba(12, 18, 29, 0.85); border: 1px solid var(--border);
+  backdrop-filter: blur(12px); font: 500 12px var(--mono); color: var(--text2);
+  pointer-events: none; transition: opacity 0.4s;
+}
+.stage-hint svg { width: 16px; height: 16px; stroke: var(--bright); fill: none; }
+
+/* navigation */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+  padding: 16px 0; background: linear-gradient(180deg, rgba(6, 9, 14, 0.94) 0%, rgba(6, 9, 14, 0.6) 70%, transparent 100%);
+  backdrop-filter: blur(14px); border-bottom: 1px solid rgba(64, 150, 255, 0.08);
+}
+nav .wrap { display: flex; align-items: center; justify-content: space-between; }
+.logo {
+  display: flex; align-items: center; gap: 12px; font-weight: 900; font-size: 21px; letter-spacing: -0.02em;
+}
+.logo-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--surf2), var(--surf));
+  border: 1px solid var(--border-bright); display: grid; place-items: center;
+}
+.logo-icon svg { width: 20px; height: 20px; }
+.logo span b { color: var(--bright); }
+.nav-links { display: flex; align-items: center; gap: 32px; font-size: 14px; font-weight: 600; color: var(--text2); }
+.nav-links a:hover { color: var(--text); }
+.nav-actions { display: flex; align-items: center; gap: 14px; }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 26px; border-radius: 14px; font-weight: 700; font-size: 15px;
+  border: 1px solid var(--border); background: rgba(19, 27, 41, 0.8); color: var(--text);
+  backdrop-filter: blur(10px); cursor: pointer; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--bright); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35); }
+.btn:active { transform: translateY(0); }
+.btn.primary {
+  background: linear-gradient(135deg, var(--blue) 0%, #1754c7 100%);
+  border-color: rgba(0, 210, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(37, 117, 252, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.btn.primary:hover {
+  background: linear-gradient(135deg, #3783fd 0%, #1a5ee2 100%);
+  box-shadow: 0 12px 42px rgba(0, 210, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn.sm { padding: 9px 18px; font-size: 13px; border-radius: 10px; }
+.btn.orange {
+  background: linear-gradient(135deg, var(--orange) 0%, #c45d00 100%);
+  border-color: rgba(255, 157, 59, 0.6);
+  box-shadow: 0 8px 32px rgba(234, 118, 0, 0.35);
+}
+.btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+/* hero section */
+#hero { min-height: 100vh; display: flex; align-items: center; padding: 140px 0 80px; }
+.hero-content { max-width: 720px; }
+.hero-title { font-weight: 900; letter-spacing: -0.04em; margin: 18px 0 12px; }
+.hero-title .glow {
+  background: linear-gradient(135deg, #ffffff 10%, var(--bright) 70%, var(--blue) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero-actions { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 40px; }
+.hero-specs {
+  display: flex; flex-wrap: wrap; gap: 24px 36px; margin-top: 54px; padding-top: 36px;
+  border-top: 1px solid var(--border); font: 500 13px/1.4 var(--mono); color: var(--text3);
+}
+.spec-item { display: flex; flex-direction: column; gap: 4px; }
+.spec-item b { color: var(--text); font-size: 18px; font-family: system-ui, sans-serif; font-weight: 800; }
+
+/* cards grid */
+.grid { display: grid; gap: 24px; margin-top: 54px; }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g2 { grid-template-columns: repeat(2, 1fr); }
+
+.card {
+  position: relative; padding: 36px; border-radius: 24px;
+  background: rgba(12, 18, 29, 0.82); border: 1px solid var(--border);
+  backdrop-filter: blur(16px); transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.card:hover {
+  border-color: var(--border-bright); transform: translateY(-4px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(0, 210, 255, 0.08);
+}
+.card::before {
+  content: ""; position: absolute; inset: 0; border-radius: 24px;
+  background: radial-gradient(circle 300px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0, 210, 255, 0.12), transparent);
+  opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.card:hover::before { opacity: 1; }
+
+.card-num {
+  font: 800 14px var(--mono); color: var(--bright); letter-spacing: 0.18em;
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;
+}
+.card h3 { margin-bottom: 12px; font-size: 24px; }
+.card p { color: var(--text2); font-size: 15px; line-height: 1.65; }
+
+/* architecture card */
+.arch-card {
+  display: grid; grid-template-columns: 80px 1fr; gap: 28px; align-items: start;
+}
+.arch-badge {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: linear-gradient(135deg, var(--surf2), var(--surf));
+  border: 1px solid var(--border-bright); display: grid; place-items: center;
+  font: 900 28px/1 var(--mono); color: var(--bright);
+}
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.tag {
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(37, 117, 252, 0.12); border: 1px solid var(--border);
+  font: 600 11px var(--mono); color: var(--bright); letter-spacing: 0.06em;
+}
+
+/* features horizontal scroll / interactive cards */
+.feat-icon {
+  width: 52px; height: 52px; border-radius: 16px;
+  background: rgba(37, 117, 252, 0.14); border: 1px solid var(--border);
+  display: grid; place-items: center; margin-bottom: 22px; color: var(--bright);
+}
+.feat-icon svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* interactive 3D camera demo */
+.demo-box {
+  display: grid; grid-template-columns: 1.7fr 1fr; gap: 28px; margin-top: 50px;
+}
+.viewport-frame {
+  position: relative; min-height: 520px; border-radius: 28px;
+  background: #05080e; border: 1px solid var(--border-bright);
+  overflow: hidden; touch-action: none;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+.viewport-frame canvas { width: 100%; height: 100%; display: block; }
+.viewport-hud {
+  position: absolute; inset: 0; pointer-events: none; padding: 22px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  font: 500 12px/1.4 var(--mono); color: var(--bright);
+}
+.hud-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.hud-rec {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; background: rgba(255, 51, 75, 0.15);
+  border: 1px solid rgba(255, 51, 75, 0.5); color: var(--rec); font-weight: 700;
+}
+.hud-rec .blink { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); animation: recBlink 1.2s infinite; }
+@keyframes recBlink { 50% { opacity: 0.2; } }
+
+.hud-crosshair {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 60px; height: 60px; pointer-events: none;
+}
+.hud-crosshair::before, .hud-crosshair::after {
+  content: ""; position: absolute; background: rgba(0, 210, 255, 0.4);
+}
+.hud-crosshair::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+.hud-crosshair::after { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+
+.hud-lines {
+  position: absolute; inset: 12% 8%; border: 1px solid rgba(0, 210, 255, 0.15); pointer-events: none;
+}
+.hud-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+
+.control-panel {
+  display: flex; flex-direction: column; gap: 20px;
+}
+.joysticks-container {
+  display: flex; gap: 20px; justify-content: center; align-items: center; padding: 10px 0;
+}
+.virtual-stick {
+  position: relative; width: 140px; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, var(--surf2), var(--surf));
+  border: 2px solid var(--border); touch-action: none; cursor: crosshair;
+}
+.stick-knob {
+  position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px;
+  border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--bright), var(--blue));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 210, 255, 0.4);
+  pointer-events: none;
+}
+.stick-label {
+  position: absolute; bottom: 12px; width: 100%; text-align: center;
+  font: 700 11px var(--mono); color: var(--text2); pointer-events: none; letter-spacing: 0.15em;
+}
+
+.lens-presets {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
+}
+.lens-btn {
+  padding: 8px 4px; border-radius: 10px; font: 700 11px var(--mono);
+  background: var(--surf); border: 1px solid var(--border); color: var(--text2);
+  cursor: pointer; text-align: center; transition: all 0.2s;
+}
+.lens-btn:hover, .lens-btn.active {
+  background: var(--blue); border-color: var(--bright); color: #fff;
+  box-shadow: 0 4px 14px rgba(37, 117, 252, 0.4);
+}
+
+.slider-group {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.slider-group label {
+  display: flex; justify-content: space-between; font: 600 12px var(--mono); color: var(--text2);
+}
+input[type=range] {
+  width: 100%; height: 6px; border-radius: 999px; appearance: none;
+  background: var(--surf2); outline: none; border: 1px solid var(--border);
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bright); cursor: pointer; box-shadow: 0 0 10px var(--bright);
+}
+
+/* downloads section */
+.download-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; margin-top: 40px;
+  max-width: 960px; margin-left: auto; margin-right: auto;
+}
+.dl-card {
+  display: flex; flex-direction: column; justify-content: space-between; min-height: 380px;
+}
+.dl-head { display: flex; flex-direction: column; gap: 14px; }
+.dl-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  font: 600 12px var(--mono); color: var(--text3); margin: 14px 0 24px;
+}
+.dl-meta span { display: flex; align-items: center; gap: 6px; }
+.dl-meta span b { color: var(--text2); }
+.file-size-badge {
+  font: 700 12px var(--mono); color: var(--ok); background: rgba(0, 255, 157, 0.1);
+  padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0, 255, 157, 0.25);
+}
+
+/* tutorial section */
+.tutorial-steps {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 44px;
+}
+.step-card {
+  position: relative; padding: 32px; border-radius: 22px;
+  background: rgba(12, 18, 29, 0.85); border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+}
+.step-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;
+}
+.step-badge {
+  font: 800 12px var(--mono); color: var(--bright); letter-spacing: 0.15em;
+  padding: 4px 10px; border-radius: 999px; background: rgba(37, 117, 252, 0.14); border: 1px solid var(--border);
+}
+.step-badge.orange {
+  color: var(--orange-bright); background: rgba(234, 118, 0, 0.14); border-color: rgba(234, 118, 0, 0.3);
+}
+.step-list {
+  list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 14px;
+}
+.step-list li {
+  display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; color: var(--text2); line-height: 1.5;
+}
+.step-list li b { color: var(--text); }
+.step-dot {
+  width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 210, 255, 0.12);
+  border: 1px solid var(--border-bright); display: grid; place-items: center;
+  font: 700 11px var(--mono); color: var(--bright); flex-shrink: 0; margin-top: 1px;
+}
+
+/* FAQ accordion */
+.faq-list { margin-top: 40px; display: flex; flex-direction: column; gap: 14px; }
+details {
+  border-radius: 18px; background: rgba(12, 18, 29, 0.7);
+  border: 1px solid var(--border); overflow: hidden; transition: border-color 0.3s;
+}
+details[open] { border-color: var(--border-bright); background: rgba(19, 27, 41, 0.85); }
+summary {
+  padding: 22px 28px; cursor: pointer; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; justify-content: space-between; user-select: none;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::after {
+  content: "+"; font-size: 26px; font-weight: 400; color: var(--bright);
+  transition: transform 0.3s;
+}
+details[open] summary::after { transform: rotate(45deg); color: var(--orange); }
+.faq-body { padding: 0 28px 24px; color: var(--text2); font-size: 15px; line-height: 1.7; }
+code {
+  font-family: var(--mono); font-size: 0.9em; padding: 2px 8px;
+  background: var(--surf2); border-radius: 6px; color: var(--bright); border: 1px solid var(--border);
+}
+
+/* footer */
+footer {
+  border-top: 1px solid var(--border); padding: 60px 0 80px;
+  background: #04060a; color: var(--text3); font-size: 14px; position: relative; z-index: 2;
+}
+.footer-wrap {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 24px;
+}
+
+/* custom cursor */
+.custom-cursor {
+  position: fixed; width: 36px; height: 36px; margin: -18px;
+  border-radius: 50%; border: 1.5px solid var(--bright);
+  pointer-events: none; z-index: 999; opacity: 0;
+  transform: translate(-100px, -100px);
+  transition: width 0.25s, height 0.25s, margin 0.25s, background-color 0.25s, opacity 0.3s;
+}
+.custom-cursor.hover {
+  width: 72px; height: 72px; margin: -36px;
+  background: rgba(0, 210, 255, 0.12); border-color: var(--bright);
+}
+
+/* responsive */
+@media (max-width: 960px) {
+  .g3, .download-grid, .demo-box, .tutorial-steps { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+  .viewport-frame { min-height: 380px; }
+  section { padding: 90px 0; }
+  .custom-cursor { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+<div class="custom-cursor" id="cursor"></div>
+
+<!-- Background 3D Viewport Scene -->
+<canvas id="stage"></canvas>
+
+<div class="stage-hint">
+  <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6v6l4 2"/></svg>
+  <span>Drag to orbit 3D Rig • Cursor drives Phone Gyro</span>
+</div>
+
+<!-- Header Navigation -->
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#hero">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+      </div>
+      <span>Alex<b>1BC</b></span>
+    </a>
+    <div class="nav-links">
+      <a href="#how">How It Works</a>
+      <a href="#tutorial">Tutorial</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#features">Rig Features</a>
+      <a href="#demo">Live 3D Demo</a>
+      <a href="#downloads">Downloads</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-actions">
+      <span class="badge"><span class="dot"></span>Blender 4.2 – 5.2</span>
+      <a class="btn primary sm" href="#downloads">Get Downloads</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <!-- Hero Section -->
+  <section id="hero">
+    <div class="wrap">
+      <div class="hero-content">
+        <div class="badge orange"><span class="dot"></span>Physical Camera Tracking</div>
+        <h1 class="hero-title">Your Camera.<br><span class="glow">Your Movement.</span></h1>
+        <p class="lead">
+          Turn your Android phone into an ultra-precise physical cinema rig for Blender. 
+          Aim with your hands, dolly with dual thumbsticks, rack focus, and capture organic hand-held motion directly into dense, editable keyframes.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#downloads">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download v0.1.0 Suite
+          </a>
+          <a class="btn" href="#demo">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Fly Camera Simulator
+          </a>
+          <button class="btn" id="recenterStageBtn" type="button" title="Recenter the 3D stage">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+            Recenter Rig
+          </button>
+        </div>
+        <div class="hero-specs">
+          <div class="spec-item"><span>LATENCY</span><b>&lt; 0.8 ms</b></div>
+          <div class="spec-item"><span>SAMPLING RATE</span><b>60 Hz Sockets</b></div>
+          <div class="spec-item"><span>TAKES RECORDING</span><b>Non-Destructive</b></div>
+          <div class="spec-item"><span>CONNECTION</span><b>Wi-Fi + USB Cable</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section id="how">
+    <div class="wrap">
+      <div class="eyebrow">Zero Friction Setup</div>
+      <h2>Scan. Aim. Shoot.</h2>
+      <p class="lead">Three steps to physical cinematography. No external trackers, no subscription, no cloud latency.</p>
+      
+      <div class="grid g3">
+        <div class="card">
+          <div class="card-num"><span>STEP 01</span><span class="badge">START ADDON</span></div>
+          <h3>Scan the QR Code</h3>
+          <p>Open Blender, press <code>N</code>, switch to the <b>Alex1BC</b> sidebar tab, and tap <b>Start Alex1BC</b>. A secure single-use QR pairing code appears instantly in your viewport.</p>
+        </div>
+        <div class="card">
+          <div class="card-num"><span>STEP 02</span><span class="badge">POINT &amp; FLY</span></div>
+          <h3>Aim Your Phone</h3>
+          <p>Scan with the native Alex1BC Android app or phone browser. Your phone’s internal IMU gyroscope streams 6-DOF rotations straight into Blender’s active camera at 60 frames per second.</p>
+        </div>
+        <div class="card">
+          <div class="card-num"><span>STEP 03</span><span class="badge orange">RECORD TAKES</span></div>
+          <h3>Capture &amp; Animate</h3>
+          <p>Tap <b>REC</b> to start real-time timeline playback. Stop whenever you’re done: the entire take bakes into clean, editable location and rotation F-Curves in a new Blender Action.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Step-by-Step Tutorial Section -->
+  <section id="tutorial">
+    <div class="wrap">
+      <div class="eyebrow">Comprehensive Walkthrough</div>
+      <h2>Setup &amp; Tutorial Guide</h2>
+      <p class="lead">Step-by-step instructions to get you tracking in under 2 minutes. No complicated calibration required.</p>
+
+      <div class="tutorial-steps">
+        <!-- Step 1 -->
+        <div class="card step-card">
+          <div class="step-header">
+            <span class="step-badge">STEP 01 // COMPUTER</span>
+            <span class="badge">BLENDER 4.2 – 5.2</span>
+          </div>
+          <h3>Install Add-on in Blender</h3>
+          <p>Get the official Blender Extension installed on your PC or Mac:</p>
+          <ul class="step-list">
+            <li><span class="step-dot">1</span><span>Download the <b>Blender Add-on (.zip)</b> below. <i>Do not extract the ZIP file.</i></span></li>
+            <li><span class="step-dot">2</span><span>Open Blender. In the top menu, go to <b>Edit &gt; Preferences &gt; Get Extensions</b>.</span></li>
+            <li><span class="step-dot">3</span><span>Click the arrow menu icon <code>⌄</code> in the top right corner and select <b>Install from Disk...</b></span></li>
+            <li><span class="step-dot">4</span><span>Select the downloaded <code>Alex1BC-Blender-Addon-0.1.0.zip</code> file. Alex1BC enables automatically!</span></li>
+            <li><span class="step-dot">5</span><span>In your 3D Viewport, press <b>N</b> to open the sidebar, click the <b>Alex1BC</b> tab, and click <b>Start Alex1BC</b>. A QR code and pairing code will appear.</span></li>
+          </ul>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="card step-card">
+          <div class="step-header">
+            <span class="step-badge orange">STEP 02 // PHONE</span>
+            <span class="badge orange">ANDROID 8.0+</span>
+          </div>
+          <h3>Install App on Your Phone</h3>
+          <p>Get the controller ready on your handheld device:</p>
+          <ul class="step-list">
+            <li><span class="step-dot">1</span><span>Download <code>Alex1BC-Android.apk</code> directly to your phone (or install via <code>adb install Alex1BC-Android.apk</code>).</span></li>
+            <li><span class="step-dot">2</span><span>Open the downloaded APK on your phone and tap <b>Install</b> (allow install from your browser/files if prompted).</span></li>
+            <li><span class="step-dot">3</span><span>Launch <b>Alex1BC</b> and grant camera permission (needed to scan the pairing QR code).</span></li>
+            <li><span class="step-dot">★</span><span><b>Zero-Install Alternative:</b> You can also simply scan the Blender QR code using your regular phone camera app to open the built-in Web Controller in Chrome or Safari without installing anything!</span></li>
+          </ul>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="card step-card">
+          <div class="step-header">
+            <span class="step-badge">STEP 03 // SYNC</span>
+            <span class="badge">1-SECOND PAIR</span>
+          </div>
+          <h3>Instant Pairing</h3>
+          <p>Connect your phone to Blender with zero manual network setup:</p>
+          <ul class="step-list">
+            <li><span class="step-dot">1</span><span>Ensure your phone is connected to the same Wi-Fi network as your computer (or plugged in via USB cable).</span></li>
+            <li><span class="step-dot">2</span><span>In the Alex1BC phone app, tap <b>Scan QR</b> and point your camera at the QR code shown in Blender's 3D Viewport.</span></li>
+            <li><span class="step-dot">3</span><span>Connection established! The phone will vibrate with haptic confirmation and the live artificial horizon gyroscope will activate instantly.</span></li>
+            <li><span class="step-dot">4</span><span>Alternatively, you can manually type the 6-digit PIN displayed below the QR code.</span></li>
+          </ul>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="card step-card">
+          <div class="step-header">
+            <span class="step-badge orange">STEP 04 // SHOOT</span>
+            <span class="badge orange">TAKES &amp; ANIMATION</span>
+          </div>
+          <h3>Shoot &amp; Animate</h3>
+          <p>Perform natural handheld shots and bake them into editable keyframes:</p>
+          <ul class="step-list">
+            <li><span class="step-dot">1</span><span><b>Select Mode:</b> Switch between <b>GYRO</b> (pure hand tilt), <b>HYBRID</b> (phone aims, sticks dolly &amp; rise), or <b>ANALOG</b> (stick-only).</span></li>
+            <li><span class="step-dot">2</span><span><b>Recenter:</b> Tap <b>HOME</b> anytime to align Blender's camera heading with your current phone orientation without jumps.</span></li>
+            <li><span class="step-dot">3</span><span><b>Record Takes:</b> Tap <b>REC</b> to start live timeline playback and recording. Tap <b>STOP</b> when finished. A new Action (<code>A1BC_Take_001</code>) is created automatically!</span></li>
+            <li><span class="step-dot">4</span><span><b>Keyframing:</b> Tap <b>KEY</b> to set an instant location, rotation, and focal length keyframe at the current timeline frame.</span></li>
+            <li><span class="step-dot">5</span><span><b>Safe &amp; Non-Destructive:</b> Existing camera animation is never erased. Click <b>Undo last take</b> in Blender to immediately restore previous animation.</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Connection Route Details -->
+      <div class="grid g2" style="margin-top: 28px;">
+        <div class="card" style="padding: 28px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span class="badge">METHOD A</span>
+            <h4 style="font-size: 18px; margin: 0;">Wi-Fi Wireless Mode</h4>
+          </div>
+          <p style="font-size: 14px; color: var(--text2); line-height: 1.6;">
+            Connect both your PC and phone to the same Wi-Fi router. 
+            The add-on broadcasts over encrypted local WebSockets. Perfect for walking freely around your studio space with zero physical tethers.
+          </p>
+        </div>
+
+        <div class="card" style="padding: 28px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span class="badge orange">METHOD B</span>
+            <h4 style="font-size: 18px; margin: 0;">USB Cable Mode (Sub-ms Latency)</h4>
+          </div>
+          <p style="font-size: 14px; color: var(--text2); line-height: 1.6;">
+            Plug your phone in with a USB cable, enable USB Debugging, and click <b>Enable USB route</b> in Blender (or run <code>adb reverse tcp:47801 tcp:47801</code>). 
+            Gives rock-solid sub-millisecond response immune to studio Wi-Fi congestion.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- System Architecture Section -->
+  <section id="architecture">
+    <div class="wrap">
+      <div class="eyebrow">Three Harmonized Components</div>
+      <h2>Engineered for 3D Artists</h2>
+      <p class="lead">Designed from the ground up for zero viewport hitching, rock-solid security, and production pipelines.</p>
+
+      <div class="grid g1" style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="card arch-card">
+          <div class="arch-badge">01</div>
+          <div>
+            <h3>Blender Native Add-on</h3>
+            <p>
+              Integrated directly into Blender 4.2, 5.0, 5.1, and 5.2. Runs a lightweight asyncio TLS WebSocket server on your LAN or USB loopback interface. 
+              Crucially, motion updates are applied on Blender's main thread timer tick so viewport navigation and EVEE/Cycles rendering remain buttery smooth.
+            </p>
+            <div class="tag-list">
+              <span class="tag">BLENDER 4.2 – 5.2</span>
+              <span class="tag">ZERO THREAD CONFLICTS</span>
+              <span class="tag">ACTION LIBRARY TAKES</span>
+              <span class="tag">LOCAL ENCRYPTION</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card arch-card">
+          <div class="arch-badge">02</div>
+          <div>
+            <h3>Android Native App (Kotlin + Compose)</h3>
+            <p>
+              Built specifically for modern Android devices with Jetpack Compose. Includes real-time CameraX QR code scanning, 
+              hardware sensor fusion (quaternion IMU tracking), ergonomic dual spring joysticks, rise/lower craning sliders, tactile haptic feedback, and camera switcher.
+            </p>
+            <div class="tag-list">
+              <span class="tag">KOTLIN / JETPACK COMPOSE</span>
+              <span class="tag">HARDWARE SENSORS</span>
+              <span class="tag">HAPTIC RESPONSE</span>
+              <span class="tag">ANDROID 8.0+</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card arch-card">
+          <div class="arch-badge">03</div>
+          <div>
+            <h3>Zero-Install Browser Controller</h3>
+            <p>
+              Need a quick shot on a friend's phone or tablet? The add-on also self-hosts a responsive Web controller over HTTPS. 
+              Scan the QR directly with any standard camera app to launch the touch controller without installing an APK.
+            </p>
+            <div class="tag-list">
+              <span class="tag">ZERO APP INSTALL</span>
+              <span class="tag">DEVICE-PULL WEB APP</span>
+              <span class="tag">USB ADB REVERSE READY</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Rig Features Section -->
+  <section id="features">
+    <div class="wrap">
+      <div class="eyebrow">Production Rig Controls</div>
+      <h2>Cinematic Control at Your Fingertips</h2>
+
+      <div class="grid g3">
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
+          <h3>Gyro, Analog &amp; Hybrid</h3>
+          <p>Choose between <b>GYRO</b> (pure phone orientation), <b>ANALOG</b> (classic dual-stick fly mode), or <b>HYBRID</b> (phone aims, sticks dolly and add yaw trim).</p>
+        </div>
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></div>
+          <h3>Cinema Prime Presets</h3>
+          <p>Instant rack focal lengths: 18mm, 24mm, 35mm, 50mm, 85mm, and 135mm in one tap, plus smooth stepless zoom sliders with live millimeter readouts.</p>
+        </div>
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+          <h3>Non-Destructive Takes</h3>
+          <p>Every recording session generates a dedicated Blender Action (<code>A1BC_Take_001</code>). Your camera's existing animation is never overwritten, and <b>Undo last take</b> restores previous states.</p>
+        </div>
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>One-Tap Keyframing</h3>
+          <p>Drop keyframes for location, rotation, and focal length at the exact playhead position without looking up at your keyboard.</p>
+        </div>
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+          <h3>Camera Switcher</h3>
+          <p>Switch between multiple scene cameras on the fly directly from the phone UI. The active viewport camera updates instantly.</p>
+        </div>
+        <div class="card">
+          <div class="feat-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+          <h3>Hardened Security</h3>
+          <p>Listens only on your private LAN or local USB. Single-use numeric verification codes, pinned TLS certificate fingerprints, and strict command allowlisting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live 3D Viewport Simulator Section -->
+  <section id="demo">
+    <div class="wrap">
+      <div class="eyebrow">Interactive 3D Stage</div>
+      <h2>Fly the Camera Simulator</h2>
+      <p class="lead">Experience the exact control scheme used by the phone. Drag the joysticks or use the viewport to test camera motions in real time.</p>
+
+      <div class="demo-box">
+        <div class="viewport-frame" id="demoViewport">
+          <canvas id="demoCanvas"></canvas>
+          <div class="viewport-hud">
+            <div class="hud-top">
+              <div>ALEX1BC // CINE SIMULATOR</div>
+              <div class="hud-rec"><span class="blink"></span><span id="hudRecText">LIVE FEED</span></div>
+              <div id="hudFps">24.00 FPS</div>
+            </div>
+            <div class="hud-lines"></div>
+            <div class="hud-crosshair"></div>
+            <div class="hud-bottom">
+              <div id="hudFocal">FOCAL: 50.0 MM</div>
+              <div id="hudCoords">POS: X: 0.0 Y: 1.2 Z: 4.8</div>
+              <div id="hudRot">ROT: P: -4° Y: 0°</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-panel card">
+          <div>
+            <span class="badge">FLIGHT CONTROLS</span>
+            <h3 style="margin-top: 10px;">Virtual Rig Panel</h3>
+          </div>
+
+          <div class="joysticks-container">
+            <div class="virtual-stick" id="joyMove">
+              <div class="stick-knob"></div>
+              <span class="stick-label">MOVE / DOLLY</span>
+            </div>
+            <div class="virtual-stick" id="joyLook">
+              <div class="stick-knob"></div>
+              <span class="stick-label">PAN / TILT</span>
+            </div>
+          </div>
+
+          <div class="slider-group">
+            <label><span>ZOOM &amp; FOCAL LENGTH</span><span id="focalLabel">50 mm</span></label>
+            <input id="demoZoom" type="range" min="16" max="135" value="50">
+          </div>
+
+          <div class="lens-presets">
+            <button class="lens-btn" data-focal="18" type="button">18mm</button>
+            <button class="lens-btn" data-focal="24" type="button">24mm</button>
+            <button class="lens-btn" data-focal="35" type="button">35mm</button>
+            <button class="lens-btn active" data-focal="50" type="button">50mm</button>
+            <button class="lens-btn" data-focal="85" type="button">85mm</button>
+            <button class="lens-btn" data-focal="135" type="button">135mm</button>
+          </div>
+
+          <div style="display: flex; gap: 12px; margin-top: 10px;">
+            <button class="btn primary" id="demoRecBtn" type="button" style="flex: 1;">
+              <span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ff334b;"></span>
+              Record Take
+            </button>
+            <button class="btn" id="demoResetBtn" type="button" style="flex: 1;">
+              Recenter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Downloads Section -->
+  <section id="downloads">
+    <div class="wrap">
+      <div class="eyebrow">Production Suite v0.1.0</div>
+      <h2>Download &amp; Install</h2>
+      <p class="lead">Get the specific files you need below. No need to download the full repository—just grab the add-on for your PC or the app for your phone.</p>
+
+      <!-- Explanatory Notice Banner -->
+      <div class="card" style="margin-top: 36px; padding: 24px 30px; border-color: rgba(0, 210, 255, 0.4); background: linear-gradient(135deg, rgba(37, 117, 252, 0.12), rgba(12, 18, 29, 0.9));">
+        <div style="display: flex; gap: 18px; align-items: center;">
+          <div style="width: 48px; height: 48px; border-radius: 14px; background: rgba(0, 210, 255, 0.16); border: 1px solid var(--border-bright); display: grid; place-items: center; flex-shrink: 0;">
+            <svg style="width: 24px; height: 24px; stroke: var(--bright); fill: none; stroke-width: 2;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </div>
+          <div>
+            <h4 style="font-size: 17px; color: var(--bright); margin-bottom: 4px;">No need to clone or download the full project!</h4>
+            <p style="font-size: 14.5px; color: var(--text2); margin: 0; line-height: 1.5;">
+              You only need the single specific file for your device: the <b>Blender Add-on</b> for your computer, or the <b>Android App</b> for your phone. Send this website link to your teammates so they can download their exact file and view the tutorial directly.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="download-grid">
+        <!-- Card 1: Blender Addon -->
+        <div class="card dl-card">
+          <div class="dl-head">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="badge">FOR COMPUTER // BLENDER</span>
+              <span class="file-size-badge" id="sizeAddon">92 KB</span>
+            </div>
+            <h3>Blender Add-on</h3>
+            <p>Official Blender Extension ZIP. Install in Blender via <code>Edit &gt; Preferences &gt; Get Extensions &gt; Install from Disk</code>.</p>
+            <div class="dl-meta">
+              <span><b>Version:</b> 0.1.0</span>
+              <span><b>Target:</b> Blender 4.2 – 5.2</span>
+              <span><b>Platform:</b> Windows / macOS / Linux</span>
+            </div>
+          </div>
+          <a class="btn primary" href="downloads/Alex1BC-Blender-Addon-0.1.0.zip" download>
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Add-on (.zip)
+          </a>
+        </div>
+
+        <!-- Card 2: Native Android App APK -->
+        <div class="card dl-card">
+          <div class="dl-head">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="badge orange">FOR PHONE // ANDROID</span>
+              <span class="file-size-badge" id="sizeApk">33.5 MB</span>
+            </div>
+            <h3>Android Native App</h3>
+            <p>Standalone debug APK compiled with Android SDK 34 and Jetpack Compose. Download directly to your phone to install.</p>
+            <div class="dl-meta">
+              <span><b>Version:</b> 0.1.0</span>
+              <span><b>Requires:</b> Android 8.0 (API 26+)</span>
+              <span><b>Status:</b> Ready to install</span>
+            </div>
+          </div>
+          <a class="btn orange" href="downloads/Alex1BC-Android.apk" download>
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Android App (.apk)
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Tips -->
+      <div class="card" style="margin-top: 32px; padding: 24px 32px; background: rgba(19, 27, 41, 0.7);">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <span class="badge orange">PRO TIP</span>
+            <span style="font-size: 14px; color: var(--text2);">Fastest USB connection via ADB (zero latency):</span>
+            <code>adb reverse tcp:47801 tcp:47801</code>
+          </div>
+          <button class="btn sm" id="copyAdbBtn" type="button">Copy ADB Command</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="eyebrow">Frequently Asked Questions</div>
+      <h2>Everything You Need to Know</h2>
+
+      <div class="faq-list">
+        <details open>
+          <summary>How does the phone communicate with Blender?</summary>
+          <div class="faq-body">
+            Alex1BC operates over your local network using secure WebSockets with TLS encryption. It runs entirely on your local machine—no telemetry, no cloud servers, and no internet required once downloaded. For zero-jitter physical studio shoots, you can also connect your phone via USB cable and use <code>adb reverse</code>.
+          </div>
+        </details>
+
+        <details>
+          <summary>Does recording takes overwrite my previous camera animation?</summary>
+          <div class="faq-body">
+            No! Alex1BC treats camera animation non-destructively. Every recording generates a brand new Blender Action (e.g. <code>A1BC_Take_001</code>, <code>A1BC_Take_002</code>). You can switch between takes in the Dope Sheet / NLA editor or tap <b>Undo last take</b> to immediately restore the camera's original animation.
+          </div>
+        </details>
+
+        <details>
+          <summary>Can I use the controller without installing the Android APK?</summary>
+          <div class="faq-body">
+            Yes. The Blender add-on includes a built-in mobile web controller served locally at <code>https://&lt;your-pc-ip&gt;:47800</code>. Simply scan the QR code using any phone's camera app to open the web controller instantly in Chrome, Safari, or Firefox.
+          </div>
+        </details>
+
+        <details>
+          <summary>What Blender versions are officially supported?</summary>
+          <div class="faq-body">
+            Alex1BC is engineered and tested against Blender <b>4.2 LTS, 5.0, 5.1.1, and 5.2 LTS</b>. It strictly adheres to Blender's modern extension manifest specification (<code>blender_manifest.toml</code>).
+          </div>
+        </details>
+
+        <details>
+          <summary>Why is the motion so smooth without stuttering?</summary>
+          <div class="faq-body">
+            Unlike simple scripts that push blocking operators into Blender, Alex1BC uses a non-blocking queue and registers a native Blender window manager timer. Camera transformations are calculated smoothly on Blender's main thread loop at the viewport display rate.
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-wrap">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-weight: 800; font-size: 18px;">Alex1BC</span>
+      <span>•</span>
+      <span>Physical Camera Control for 3D Artists</span>
+    </div>
+    <div style="font-size: 13px;">
+      Standalone open suite • Blender is a registered trademark of the Blender Foundation.
+    </div>
+  </div>
+</footer>
+
+<!-- Vendor scripts (offline fallback supported) -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  // --- Utility Shortcuts
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+  // --- Dynamic File Size Detection (works on both http:// and file:///)
+  function checkDownloadFiles() {
+    const files = [
+      { id: 'sizeAddon', path: 'downloads/Alex1BC-Blender-Addon-0.1.0.zip', fallback: '92 KB' },
+      { id: 'sizeApk', path: 'downloads/Alex1BC-Android.apk', fallback: '33.5 MB' }
+    ];
+
+    files.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      if (location.protocol === 'file:') {
+        el.textContent = f.fallback;
+        return;
+      }
+      fetch(f.path, { method: 'HEAD' })
+        .then(res => {
+          if (res.ok) {
+            const bytes = Number(res.headers.get('content-length'));
+            if (bytes) {
+              el.textContent = bytes > 1048576 
+                ? (bytes / 1048576).toFixed(1) + ' MB' 
+                : Math.round(bytes / 1024) + ' KB';
+            }
+          } else {
+            el.textContent = f.fallback;
+          }
+        })
+        .catch(() => { el.textContent = f.fallback; });
+    });
+  }
+  checkDownloadFiles();
+
+  // --- ADB Copy Button
+  const copyBtn = document.getElementById('copyAdbBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText('adb reverse tcp:47801 tcp:47801').then(() => {
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = 'Copied to Clipboard!';
+        copyBtn.style.borderColor = 'var(--ok)';
+        copyBtn.style.color = 'var(--ok)';
+        setTimeout(() => {
+          copyBtn.textContent = prev;
+          copyBtn.style.borderColor = '';
+          copyBtn.style.color = '';
+        }, 2200);
+      });
+    });
+  }
+
+  // --- Custom Smooth Cursor
+  const cursor = document.getElementById('cursor');
+  let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+  let cx = mx, cy = my;
+  let mouseVel = 0, lastMx = mx, lastMy = my, lastTime = performance.now();
+
+  window.addEventListener('pointermove', (e) => {
+    mx = e.clientX;
+    my = e.clientY;
+    if (cursor) cursor.style.opacity = '1';
+
+    const now = performance.now();
+    const dt = Math.max(1, now - lastTime);
+    const dist = Math.hypot(mx - lastMx, my - lastMy);
+    mouseVel = Math.min(2.5, dist / dt * 0.8);
+    lastMx = mx; lastMy = my; lastTime = now;
+  }, { passive: true });
+
+  function updateCursor() {
+    cx += (mx - cx) * 0.2;
+    cy += (my - cy) * 0.2;
+    if (cursor) {
+      cursor.style.transform = `translate(${cx}px, ${cy}px)`;
+    }
+    requestAnimationFrame(updateCursor);
+  }
+  requestAnimationFrame(updateCursor);
+
+  $$('a, button, .card, input').forEach(el => {
+    el.addEventListener('pointerenter', () => cursor && cursor.classList.add('hover'));
+    el.addEventListener('pointerleave', () => cursor && cursor.classList.remove('hover'));
+  });
+
+  // Card dynamic mouse glow
+  $$('.card').forEach(card => {
+    card.addEventListener('pointermove', (e) => {
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty('--mouse-x', (e.clientX - rect.left) + 'px');
+      card.style.setProperty('--mouse-y', (e.clientY - rect.top) + 'px');
+    });
+  });
+
+  // --- Top Scroll Progress Bar
+  const progressBar = document.getElementById('progress-bar');
+  window.addEventListener('scroll', () => {
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = total > 0 ? window.scrollY / total : 0;
+    if (progressBar) progressBar.style.transform = `scaleX(${progress})`;
+  }, { passive: true });
+
+  // =========================================================================
+  // 1. FULLSCREEN 3D BACKGROUND STAGE (Three.js)
+  // =========================================================================
+  if (typeof THREE !== 'undefined') {
+    initStage3D();
+    initDemo3D();
+  }
+
+  function initStage3D() {
+    const canvas = document.getElementById('stage');
+    if (!canvas) return;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x06090e, 0.025);
+
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 11);
+
+    // --- Studio Lights
+    const ambientLight = new THREE.AmbientLight(0x3a5477, 0.7);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    keyLight.position.set(5, 8, 6);
+    scene.add(keyLight);
+
+    const cyanRim = new THREE.PointLight(0x00d2ff, 3.5, 30);
+    cyanRim.position.set(-6, 3, 4);
+    scene.add(cyanRim);
+
+    const orangeFill = new THREE.PointLight(0xea7600, 2.8, 30);
+    orangeFill.position.set(6, -2, 5);
+    scene.add(orangeFill);
+
+    // --- World Rig Container
+    const world = new THREE.Group();
+    scene.add(world);
+
+    // --- Materials Helper
+    const carbonMat = new THREE.MeshStandardMaterial({
+      color: 0x111622, metalness: 0.85, roughness: 0.35
+    });
+    const alloyMat = new THREE.MeshStandardMaterial({
+      color: 0x24324a, metalness: 0.9, roughness: 0.25
+    });
+    const brightMat = new THREE.MeshStandardMaterial({
+      color: 0x00d2ff, emissive: 0x00d2ff, emissiveIntensity: 1.8, roughness: 0.2
+    });
+    const orangeMat = new THREE.MeshStandardMaterial({
+      color: 0xea7600, emissive: 0xea7600, emissiveIntensity: 1.2, roughness: 0.3
+    });
+    const tallyMat = new THREE.MeshBasicMaterial({ color: 0xff334b });
+    const lensGlassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x031326, metalness: 0.9, roughness: 0.05,
+      transmission: 0.6, thickness: 1.2,
+      emissive: 0x0055aa, emissiveIntensity: 0.4
+    });
+
+    // --- 1. Cinema Camera Model (Modular Cine Rig)
+    function buildCinemaRig() {
+      const g = new THREE.Group();
+      g.userData.parts = {};
+
+      // Camera Main Body
+      const bodyGeo = new THREE.BoxGeometry(2.3, 1.45, 1.6);
+      const body = new THREE.Mesh(bodyGeo, carbonMat);
+      g.add(body);
+      g.userData.parts.body = body;
+
+      // Top Cheese Plate & CNC Handle
+      const plateGeo = new THREE.BoxGeometry(2.1, 0.12, 1.4);
+      const plate = new THREE.Mesh(plateGeo, alloyMat);
+      plate.position.set(0, 0.78, 0);
+      g.add(plate);
+
+      const handleGeo = new THREE.BoxGeometry(1.6, 0.3, 0.25);
+      const handle = new THREE.Mesh(handleGeo, alloyMat);
+      handle.position.set(-0.1, 1.15, 0);
+      g.add(handle);
+
+      const handlePillar1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.32, 16), alloyMat);
+      handlePillar1.position.set(-0.7, 0.96, 0);
+      g.add(handlePillar1);
+      const handlePillar2 = handlePillar1.clone();
+      handlePillar2.position.set(0.5, 0.96, 0);
+      g.add(handlePillar2);
+
+      // Cine Lens Barrel & Mount
+      const lensGroup = new THREE.Group();
+      lensGroup.position.set(0, 0, 0.8);
+
+      const mount = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.76, 0.22, 32), alloyMat);
+      mount.rotation.x = Math.PI / 2;
+      mount.position.z = 0.1;
+      lensGroup.add(mount);
+
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.7, 1.1, 48), carbonMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.z = 0.7;
+      lensGroup.add(barrel);
+
+      // Gear rings (Focus & Iris)
+      const gearRing1 = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.035, 16, 48), alloyMat);
+      gearRing1.position.z = 0.5;
+      lensGroup.add(gearRing1);
+
+      const gearRing2 = new THREE.Mesh(new THREE.TorusGeometry(0.67, 0.035, 16, 48), brightMat);
+      gearRing2.position.z = 0.95;
+      lensGroup.add(gearRing2);
+
+      // Front Lens Element (Glass)
+      const frontGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.06, 32), lensGlassMat);
+      frontGlass.rotation.x = Math.PI / 2;
+      frontGlass.position.z = 1.25;
+      lensGroup.add(frontGlass);
+
+      // Matte Box & Top Flag
+      const matteBoxGroup = new THREE.Group();
+      matteBoxGroup.position.z = 1.35;
+
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 0.4), carbonMat);
+      matteBoxGroup.add(hood);
+
+      const topFlag = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 0.6), alloyMat);
+      topFlag.position.set(0, 0.62, 0.15);
+      topFlag.rotation.x = -0.3;
+      matteBoxGroup.add(topFlag);
+
+      lensGroup.add(matteBoxGroup);
+      g.add(lensGroup);
+      g.userData.parts.lens = lensGroup;
+      g.userData.parts.gearRing = gearRing2;
+
+      // Swivel Monitor Screen
+      const monitorGroup = new THREE.Group();
+      monitorGroup.position.set(0.7, 1.1, 0.4);
+      monitorGroup.rotation.y = -0.4;
+
+      const monitorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.1), carbonMat);
+      monitorGroup.add(monitorFrame);
+
+      const monitorScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.52), new THREE.MeshBasicMaterial({ color: 0x004488 }));
+      monitorScreen.position.z = 0.055;
+      monitorGroup.add(monitorScreen);
+      g.add(monitorGroup);
+      g.userData.parts.monitor = monitorGroup;
+
+      // Rear V-Mount Battery
+      const batteryGroup = new THREE.Group();
+      batteryGroup.position.set(0, 0, -1.05);
+
+      const battery = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 0.5), carbonMat);
+      batteryGroup.add(battery);
+
+      // Battery Status LEDs
+      for (let i = 0; i < 4; i++) {
+        const led = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshBasicMaterial({ color: 0x00ff9d }));
+        led.position.set(0.6, -0.3 + i * 0.16, 0.26);
+        batteryGroup.add(led);
+      }
+      g.add(batteryGroup);
+      g.userData.parts.battery = batteryGroup;
+
+      // Dual Wireless Antennas
+      const antenna1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 16), alloyMat);
+      antenna1.position.set(-0.8, 1.2, -0.5);
+      antenna1.rotation.z = -0.25;
+      g.add(antenna1);
+
+      const antennaBeacon = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), brightMat);
+      antennaBeacon.position.set(-0.9, 1.6, -0.5);
+      g.add(antennaBeacon);
+
+      // Front Tally Light (Red Recording LED)
+      const tally = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), tallyMat);
+      tally.position.set(0.85, 0.5, 0.82);
+      g.add(tally);
+      g.userData.parts.tally = tally;
+
+      return g;
+    }
+
+    const cameraRig = buildCinemaRig();
+    cameraRig.position.set(2.4, 0, 0);
+    world.add(cameraRig);
+
+    // --- 2. Interactive Smartphone Model with Live Dynamic Screen
+    const phoneScreenCanvas = document.createElement('canvas');
+    phoneScreenCanvas.width = 512;
+    phoneScreenCanvas.height = 1024;
+    const sCtx = phoneScreenCanvas.getContext('2d');
+    const phoneScreenTexture = new THREE.CanvasTexture(phoneScreenCanvas);
+
+    function buildPhone() {
+      const g = new THREE.Group();
+
+      // Phone Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 2.3, 0.12), carbonMat);
+      g.add(body);
+
+      // Bezel Edge (Titanium band)
+      const band = new THREE.Mesh(new THREE.BoxGeometry(1.18, 2.33, 0.11), alloyMat);
+      g.add(band);
+
+      // Front Display Screen
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 2.2), new THREE.MeshBasicMaterial({
+        map: phoneScreenTexture
+      }));
+      screen.position.z = 0.065;
+      g.add(screen);
+
+      // Back Camera Bump
+      const bump = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.52, 0.06), carbonMat);
+      bump.position.set(0.26, 0.72, -0.08);
+      g.add(bump);
+
+      // Triple Lenses
+      [[-0.1, 0.1], [0.1, 0.1], [0, -0.12]].forEach(offset => {
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 24), alloyMat);
+        lens.rotation.x = Math.PI / 2;
+        lens.position.set(0.26 + offset[0], 0.72 + offset[1], -0.11);
+        g.add(lens);
+      });
+
+      return g;
+    }
+
+    const phoneRig = buildPhone();
+    phoneRig.position.set(-2.5, 0, 0);
+    world.add(phoneRig);
+
+    // --- Dynamic Phone Screen Drawing (Reacts to Cursor Gyro)
+    let screenPitch = 0, screenRoll = 0, screenYaw = 0;
+    function renderPhoneScreen(time) {
+      if (!sCtx) return;
+      const w = 512, h = 1024;
+      sCtx.clearRect(0, 0, w, h);
+
+      // Background
+      const bgGrad = sCtx.createLinearGradient(0, 0, 0, h);
+      bgGrad.addColorStop(0, '#090e18');
+      bgGrad.addColorStop(1, '#05070c');
+      sCtx.fillStyle = bgGrad;
+      sCtx.fillRect(0, 0, w, h);
+
+      // Header Bar
+      sCtx.fillStyle = 'rgba(0, 210, 255, 0.12)';
+      sCtx.fillRect(20, 24, w - 40, 56);
+      sCtx.strokeStyle = 'rgba(0, 210, 255, 0.3)';
+      sCtx.lineWidth = 2;
+      sCtx.strokeRect(20, 24, w - 40, 56);
+
+      sCtx.fillStyle = '#00d2ff';
+      sCtx.font = 'bold 22px "JetBrains Mono", monospace';
+      sCtx.fillText('ALEX1BC', 38, 60);
+
+      sCtx.fillStyle = '#00ff9d';
+      sCtx.font = '16px monospace';
+      sCtx.fillText('● CONNECTED (0.4ms)', 260, 60);
+
+      // Artificial Horizon Gyro Visualizer
+      sCtx.save();
+      sCtx.translate(w / 2, 340);
+      sCtx.rotate(screenRoll);
+
+      // Horizon Circle
+      sCtx.beginPath();
+      sCtx.arc(0, 0, 150, 0, Math.PI * 2);
+      sCtx.strokeStyle = 'rgba(64, 150, 255, 0.3)';
+      sCtx.lineWidth = 3;
+      sCtx.stroke();
+
+      // Pitch Ladder
+      const pOffset = screenPitch * 140;
+      sCtx.strokeStyle = '#00d2ff';
+      sCtx.lineWidth = 3;
+      sCtx.beginPath();
+      sCtx.moveTo(-110, pOffset);
+      sCtx.lineTo(110, pOffset);
+      sCtx.stroke();
+
+      // Center reticle
+      sCtx.fillStyle = '#ea7600';
+      sCtx.beginPath();
+      sCtx.arc(0, 0, 8, 0, Math.PI * 2);
+      sCtx.fill();
+      sCtx.restore();
+
+      // Live Telemetry Readout
+      sCtx.fillStyle = '#f3f7fc';
+      sCtx.font = 'bold 20px "JetBrains Mono", monospace';
+      sCtx.fillText(`PITCH: ${(screenPitch * 57.3).toFixed(1)}°`, 60, 560);
+      sCtx.fillText(`ROLL:  ${(screenRoll * 57.3).toFixed(1)}°`, 60, 600);
+      sCtx.fillText(`YAW:   ${(screenYaw * 57.3).toFixed(1)}°`, 60, 640);
+
+      sCtx.fillStyle = '#9db0c9';
+      sCtx.font = '16px monospace';
+      sCtx.fillText(`FOCAL: 50.0mm   FPS: 24.0`, 60, 680);
+
+      // Audio / Signal Waveform
+      sCtx.strokeStyle = 'rgba(0, 210, 255, 0.5)';
+      sCtx.lineWidth = 3;
+      sCtx.beginPath();
+      for (let x = 60; x <= w - 60; x += 10) {
+        const waveY = 740 + Math.sin(x * 0.05 + time * 6) * 16 * (1 + mouseVel);
+        if (x === 60) sCtx.moveTo(x, waveY);
+        else sCtx.lineTo(x, waveY);
+      }
+      sCtx.stroke();
+
+      // Bottom Joysticks representation
+      [[130, 880], [382, 880]].forEach((pos, idx) => {
+        sCtx.beginPath();
+        sCtx.arc(pos[0], pos[1], 64, 0, Math.PI * 2);
+        sCtx.fillStyle = '#131b29';
+        sCtx.fill();
+        sCtx.strokeStyle = 'rgba(0, 210, 255, 0.3)';
+        sCtx.stroke();
+
+        // Knob offset
+        const kx = pos[0] + (idx === 0 ? screenYaw * 30 : screenRoll * 30);
+        const ky = pos[1] + screenPitch * 30;
+        sCtx.beginPath();
+        sCtx.arc(kx, ky, 28, 0, Math.PI * 2);
+        sCtx.fillStyle = idx === 0 ? '#2575fc' : '#ea7600';
+        sCtx.fill();
+      });
+
+      phoneScreenTexture.needsUpdate = true;
+    }
+
+    // --- 3. Dynamic Laser Telemetry Stream (Phone -> Camera)
+    const BEAM_POINTS = 90;
+    const beamGeo = new THREE.BufferGeometry();
+    const beamPos = new Float32Array(BEAM_POINTS * 3);
+    beamGeo.setAttribute('position', new THREE.BufferAttribute(beamPos, 3));
+
+    const beamMat = new THREE.PointsMaterial({
+      color: 0x00d2ff,
+      size: 0.12,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const telemetryBeam = new THREE.Points(beamGeo, beamMat);
+    world.add(telemetryBeam);
+
+    // Glowing Line Spline
+    const splineMat = new THREE.LineBasicMaterial({
+      color: 0x2575fc,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending
+    });
+    const splineGeo = new THREE.BufferGeometry();
+    const splinePos = new Float32Array(BEAM_POINTS * 3);
+    splineGeo.setAttribute('position', new THREE.BufferAttribute(splinePos, 3));
+    const telemetryLine = new THREE.Line(splineGeo, splineMat);
+    world.add(telemetryLine);
+
+    // --- 4. Floating 3D Ambient Dust Particles
+    const DUST_COUNT = 320;
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(DUST_COUNT * 3);
+    for (let i = 0; i < DUST_COUNT * 3; i += 3) {
+      dustPos[i] = (Math.random() - 0.5) * 30;
+      dustPos[i + 1] = (Math.random() - 0.5) * 20;
+      dustPos[i + 2] = (Math.random() - 0.5) * 20;
+    }
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    const dustMat = new THREE.PointsMaterial({
+      color: 0x00d2ff,
+      size: 0.04,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false
+    });
+    const dust = new THREE.Points(dustGeo, dustMat);
+    scene.add(dust);
+
+    // --- 5. Aperture Rings Shading Backdrop
+    const apertureGeo = new THREE.RingGeometry(2.5, 12, 6);
+    const apertureMat = new THREE.MeshBasicMaterial({
+      color: 0x2575fc,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.08
+    });
+    const apertureMesh = new THREE.Mesh(apertureGeo, apertureMat);
+    apertureMesh.position.z = -8;
+    scene.add(apertureMesh);
+
+    // --- User Orbit Controls & Pointer Tracking
+    let isDragging = false, dragStartX = 0, dragStartY = 0;
+    let orbitYaw = 0, orbitPitch = 0;
+    let targetOrbitYaw = 0, targetOrbitPitch = 0;
+    let mouseNormX = 0, mouseNormY = 0;
+
+    window.addEventListener('pointermove', (e) => {
+      mouseNormX = (e.clientX / window.innerWidth) * 2 - 1;
+      mouseNormY = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      if (isDragging) {
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        targetOrbitYaw += dx * 0.005;
+        targetOrbitPitch = Math.max(-0.6, Math.min(0.6, targetOrbitPitch + dy * 0.005));
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    ['pointerup', 'pointercancel'].forEach(ev => {
+      canvas.addEventListener(ev, () => { isDragging = false; });
+    });
+
+    const recenterBtn = document.getElementById('recenterStageBtn');
+    if (recenterBtn) {
+      recenterBtn.addEventListener('click', () => {
+        targetOrbitYaw = 0;
+        targetOrbitPitch = 0;
+      });
+    }
+
+    // --- Resize Handler
+    function onResize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // --- Scroll Story Parameters (GSAP ScrollTrigger)
+    const stageState = {
+      phoneX: -2.5,
+      phoneY: 0,
+      phoneZ: 0,
+      camX: 2.4,
+      camY: 0,
+      camZ: 0,
+      explodeDist: 0,
+      beamIntensity: 1,
+      worldZ: 0,
+      rotY: 0
+    };
+
+    if (window.gsap && window.ScrollTrigger) {
+      gsap.registerPlugin(ScrollTrigger);
+
+      const stTl = gsap.timeline({
+        scrollTrigger: {
+          trigger: 'body',
+          start: 'top top',
+          end: 'bottom bottom',
+          scrub: 1.2
+        }
+      });
+
+      // 1. Scroll to #how: Phone steps forward, beam surges
+      stTl.to(stageState, {
+        phoneX: -1.8, phoneZ: 1.2, camX: 1.8, camZ: -0.5,
+        beamIntensity: 1.6, rotY: 0.2, duration: 1
+      });
+
+      // 2. Scroll to #architecture: Exploded technical view
+      stTl.to(stageState, {
+        phoneX: -3.2, camX: 2.8, explodeDist: 0.9,
+        beamIntensity: 0.6, rotY: -0.4, duration: 1
+      });
+
+      // 3. Scroll to #features: Close-up on lens mechanics
+      stTl.to(stageState, {
+        phoneX: -4.5, camX: 0.2, camY: 0.1, camZ: 3.5,
+        explodeDist: 0.1, rotY: 0.35, duration: 1
+      });
+
+      // 4. Scroll to #demo & downloads: Grounding rig
+      stTl.to(stageState, {
+        phoneX: -2.0, camX: 2.0, camZ: -1.0, explodeDist: 0,
+        beamIntensity: 1.4, rotY: 0, duration: 1
+      });
+    }
+
+    // --- Main Animation Loop
+    let clock = 0;
+    const pStart = new THREE.Vector3();
+    const pEnd = new THREE.Vector3();
+    const pControl = new THREE.Vector3();
+
+    function animateStage() {
+      requestAnimationFrame(animateStage);
+      clock += 0.016;
+
+      // Smooth Orbit Intertia
+      orbitYaw += (targetOrbitYaw - orbitYaw) * 0.08;
+      orbitPitch += (targetOrbitPitch - orbitPitch) * 0.08;
+
+      // Phone Gyro Tilt (Cursor Parallax)
+      const targetPhoneRoll = mouseNormX * 0.45;
+      const targetPhonePitch = mouseNormY * 0.35;
+      const targetPhoneYaw = mouseNormX * 0.6;
+
+      screenRoll += (targetPhoneRoll - screenRoll) * 0.1;
+      screenPitch += (targetPhonePitch - screenPitch) * 0.1;
+      screenYaw += (targetPhoneYaw - screenYaw) * 0.1;
+
+      // Update phone screen canvas
+      renderPhoneScreen(clock);
+
+      // Apply motion to Phone Rig
+      phoneRig.position.set(
+        stageState.phoneX,
+        stageState.phoneY + Math.sin(clock * 1.5) * 0.06,
+        stageState.phoneZ
+      );
+      phoneRig.rotation.set(
+        screenPitch,
+        screenYaw + orbitYaw + stageState.rotY,
+        -screenRoll
+      );
+
+      // Camera Rig follows phone with natural tracking lag (This IS the product!)
+      cameraRig.position.set(
+        stageState.camX,
+        stageState.camY + Math.sin(clock * 1.7 + 1) * 0.06,
+        stageState.camZ
+      );
+
+      cameraRig.rotation.x += (screenPitch - cameraRig.rotation.x) * 0.06;
+      cameraRig.rotation.y += ((screenYaw + orbitYaw + stageState.rotY) - cameraRig.rotation.y) * 0.06;
+      cameraRig.rotation.z += (-screenRoll * 0.5 - cameraRig.rotation.z) * 0.06;
+
+      // Exploded Parts translation
+      if (cameraRig.userData.parts) {
+        const ex = stageState.explodeDist;
+        const p = cameraRig.userData.parts;
+        if (p.lens) p.lens.position.z = 0.8 + ex * 1.4;
+        if (p.battery) p.battery.position.z = -1.05 - ex * 1.2;
+        if (p.monitor) p.monitor.position.x = 0.7 + ex * 0.8;
+        if (p.gearRing) p.gearRing.rotation.z = clock * 0.8;
+        if (p.tally) p.tally.visible = Math.floor(clock * 2.5) % 2 === 0;
+      }
+
+      // Update Telemetry Stream Spline & Particles
+      pStart.copy(phoneRig.position).add(new THREE.Vector3(0.5, 0.8, 0));
+      pEnd.copy(cameraRig.position).add(new THREE.Vector3(-1.1, 0.4, 0));
+      pControl.copy(pStart).add(pEnd).multiplyScalar(0.5);
+      pControl.y += 1.2 + Math.sin(clock * 3) * 0.15;
+
+      const posArray = beamGeo.attributes.position.array;
+      const splineArray = splineGeo.attributes.position.array;
+
+      for (let i = 0; i < BEAM_POINTS; i++) {
+        // Curve parameter
+        const uStatic = i / (BEAM_POINTS - 1);
+        const kS = 1 - uStatic;
+        splineArray[i * 3] = kS * kS * pStart.x + 2 * kS * uStatic * pControl.x + uStatic * uStatic * pEnd.x;
+        splineArray[i * 3 + 1] = kS * kS * pStart.y + 2 * kS * uStatic * pControl.y + uStatic * uStatic * pEnd.y;
+        splineArray[i * 3 + 2] = kS * kS * pStart.z + 2 * kS * uStatic * pControl.z + uStatic * uStatic * pEnd.z;
+
+        // Animated particle flow
+        const u = ((i / BEAM_POINTS) + clock * (0.35 + mouseVel * 0.5)) % 1;
+        const k = 1 - u;
+        posArray[i * 3] = k * k * pStart.x + 2 * k * u * pControl.x + u * u * pEnd.x;
+        posArray[i * 3 + 1] = k * k * pStart.y + 2 * k * u * pControl.y + u * u * pEnd.y + Math.sin(u * 18 + clock * 6) * 0.04;
+        posArray[i * 3 + 2] = k * k * pStart.z + 2 * k * u * pControl.z + u * u * pEnd.z;
+      }
+      beamGeo.attributes.position.needsUpdate = true;
+      splineGeo.attributes.position.needsUpdate = true;
+      beamMat.opacity = Math.min(1, 0.85 * stageState.beamIntensity * (1 + mouseVel * 0.4));
+
+      // Dust & aperture motion
+      dust.rotation.y = clock * 0.02 + orbitYaw * 0.2;
+      apertureMesh.rotation.z = clock * 0.04;
+
+      // Render Stage
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animateStage);
+  }
+
+  // =========================================================================
+  // 2. INTERACTIVE 3D CAMERA VIEWPORT SIMULATOR (#demo)
+  // =========================================================================
+  function initDemo3D() {
+    const canvas = document.getElementById('demoCanvas');
+    const container = document.getElementById('demoViewport');
+    if (!canvas || !container) return;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x06090e);
+    scene.fog = new THREE.Fog(0x06090e, 8, 30);
+
+    // Studio Lights
+    const ambient = new THREE.AmbientLight(0x406085, 0.8);
+    scene.add(ambient);
+
+    const studioKey = new THREE.DirectionalLight(0xffffff, 1.2);
+    studioKey.position.set(4, 7, 5);
+    scene.add(studioKey);
+
+    const rim = new THREE.PointLight(0x00d2ff, 2.5, 20);
+    rim.position.set(-5, 3, -2);
+    scene.add(rim);
+
+    // 3D Floor Grid
+    const grid = new THREE.GridHelper(30, 30, 0x2575fc, 0x142035);
+    scene.add(grid);
+
+    // 3D Centerpiece Sculpture (Blender style polyhedral art)
+    const sculptGroup = new THREE.Group();
+    sculptGroup.position.set(0, 1.2, 0);
+
+    const coreGeo = new THREE.IcosahedronGeometry(1.2, 1);
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x1a2842, metalness: 0.8, roughness: 0.2, flatShading: true
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    sculptGroup.add(coreMesh);
+
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, wireframe: true });
+    const wireMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.22, 1), wireMat);
+    sculptGroup.add(wireMesh);
+
+    // Orbiting satellite rings
+    const ringGeo = new THREE.TorusGeometry(1.9, 0.03, 16, 64);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xea7600, emissive: 0xea7600, emissiveIntensity: 0.8 });
+    const orbitRing = new THREE.Mesh(ringGeo, ringMat);
+    orbitRing.rotation.x = Math.PI / 3;
+    sculptGroup.add(orbitRing);
+
+    scene.add(sculptGroup);
+
+    // Studio Monolith Pillars
+    [[-4, -5], [4, -6], [-5, 4], [5, 3], [-2, -8]].forEach((pos, idx) => {
+      const h = 2.2 + idx * 0.4;
+      const col = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.35, h, 6),
+        new THREE.MeshStandardMaterial({ color: 0x0e1726, metalness: 0.6, roughness: 0.4 })
+      );
+      col.position.set(pos[0], h / 2, pos[1]);
+      scene.add(col);
+    });
+
+    // Virtual Cinema Camera
+    const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 50);
+    const camState = {
+      x: 0, y: 1.4, z: 4.8,
+      yaw: 0, pitch: -0.06,
+      focal: 50,
+      isRecording: false
+    };
+
+    function updateDemoSize() {
+      const w = container.clientWidth, h = container.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', updateDemoSize);
+    updateDemoSize();
+
+    // Joystick Controller Logic
+    const joyInput = { mx: 0, my: 0, lx: 0, ly: 0 };
+
+    function bindJoystick(stickId, onMove) {
+      const stick = document.getElementById(stickId);
+      if (!stick) return;
+      const knob = stick.querySelector('.stick-knob');
+      let activeId = null;
+
+      function setPos(x, y) {
+        const rad = stick.clientWidth / 2 - 25;
+        knob.style.transform = `translate(${x * rad}px, ${y * rad}px)`;
+        onMove(x, -y);
+      }
+
+      function handlePointer(e) {
+        const rect = stick.getBoundingClientRect();
+        const rad = rect.width / 2 - 25;
+        let dx = (e.clientX - rect.left - rect.width / 2) / rad;
+        let dy = (e.clientY - rect.top - rect.height / 2) / rad;
+        const len = Math.hypot(dx, dy);
+        if (len > 1) { dx /= len; dy /= len; }
+        setPos(dx, dy);
+      }
+
+      stick.addEventListener('pointerdown', (e) => {
+        activeId = e.pointerId;
+        stick.setPointerCapture(activeId);
+        handlePointer(e);
+      });
+
+      stick.addEventListener('pointermove', (e) => {
+        if (e.pointerId === activeId) handlePointer(e);
+      });
+
+      ['pointerup', 'pointercancel'].forEach(ev => {
+        stick.addEventListener(ev, () => {
+          activeId = null;
+          setPos(0, 0);
+        });
+      });
+    }
+
+    bindJoystick('joyMove', (x, y) => { joyInput.mx = x; joyInput.my = y; });
+    bindJoystick('joyLook', (x, y) => { joyInput.lx = x; joyInput.ly = y; });
+
+    // Focal Zoom Slider
+    const zoomSlider = document.getElementById('demoZoom');
+    const focalLabel = document.getElementById('focalLabel');
+    const hudFocal = document.getElementById('hudFocal');
+
+    function setFocalLength(mm) {
+      camState.focal = mm;
+      if (zoomSlider) zoomSlider.value = mm;
+      if (focalLabel) focalLabel.textContent = `${mm} mm`;
+      if (hudFocal) hudFocal.textContent = `FOCAL: ${mm.toFixed(1)} MM`;
+
+      // 35mm full-frame FOV formula: 2 * atan(18 / f)
+      camera.fov = 2 * Math.atan(18 / mm) * (180 / Math.PI);
+      camera.updateProjectionMatrix();
+    }
+
+    if (zoomSlider) {
+      zoomSlider.addEventListener('input', (e) => {
+        setFocalLength(Number(e.target.value));
+      });
+    }
+
+    // Lens Preset Buttons
+    $$('.lens-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.lens-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        setFocalLength(Number(btn.getAttribute('data-focal')));
+      });
+    });
+
+    // Reset Button
+    const resetBtn = document.getElementById('demoResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        camState.x = 0; camState.y = 1.4; camState.z = 4.8;
+        camState.yaw = 0; camState.pitch = -0.06;
+        setFocalLength(50);
+        $$('.lens-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-focal') === '50'));
+      });
+    }
+
+    // Record Button
+    const recBtn = document.getElementById('demoRecBtn');
+    const hudRecText = document.getElementById('hudRecText');
+    if (recBtn) {
+      recBtn.addEventListener('click', () => {
+        camState.isRecording = !camState.isRecording;
+        if (camState.isRecording) {
+          recBtn.innerHTML = '<span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #00ff9d;"></span> Stop Take';
+          recBtn.classList.add('orange');
+          if (hudRecText) hudRecText.textContent = 'REC [00:14]';
+        } else {
+          recBtn.innerHTML = '<span class="dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ff334b;"></span> Record Take';
+          recBtn.classList.remove('orange');
+          if (hudRecText) hudRecText.textContent = 'TAKE_001 SAVED';
+          setTimeout(() => { if (!camState.isRecording && hudRecText) hudRecText.textContent = 'LIVE FEED'; }, 2000);
+        }
+      });
+    }
+
+    // HUD Elements
+    const hudCoords = document.getElementById('hudCoords');
+    const hudRot = document.getElementById('hudRot');
+
+    // Demo Render Loop
+    let lastDemoTime = performance.now();
+    function animateDemo() {
+      requestAnimationFrame(animateDemo);
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - lastDemoTime) / 1000);
+      lastDemoTime = now;
+
+      // Rotate centerpiece
+      sculptGroup.rotation.y += 0.008;
+      orbitRing.rotation.z += 0.012;
+
+      // Apply Joystick Look (Yaw & Pitch)
+      camState.yaw -= joyInput.lx * 1.8 * dt;
+      camState.pitch = Math.max(-0.7, Math.min(0.7, camState.pitch + joyInput.ly * 1.5 * dt));
+
+      // Apply Joystick Move (Dolly Forward/Back & Lateral Strafe)
+      const forwardX = -Math.sin(camState.yaw);
+      const forwardZ = -Math.cos(camState.yaw);
+      const rightX = Math.cos(camState.yaw);
+      const rightZ = -Math.sin(camState.yaw);
+
+      const speed = 4.2 * dt;
+      camState.x += (forwardX * joyInput.my + rightX * joyInput.mx) * speed;
+      camState.z += (forwardZ * joyInput.my + rightZ * joyInput.mx) * speed;
+
+      // Boundary limits
+      camState.x = Math.max(-9, Math.min(9, camState.x));
+      camState.z = Math.max(-10, Math.min(10, camState.z));
+
+      camera.position.set(camState.x, camState.y, camState.z);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.set(camState.pitch, camState.yaw, 0);
+
+      // Update HUD
+      if (hudCoords) {
+        hudCoords.textContent = `POS: X: ${camState.x.toFixed(1)} Y: ${camState.y.toFixed(1)} Z: ${camState.z.toFixed(1)}`;
+      }
+      if (hudRot) {
+        hudRot.textContent = `ROT: P: ${(camState.pitch * 57.3).toFixed(0)}° Y: ${(camState.yaw * 57.3).toFixed(0)}°`;
+      }
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animateDemo);
+  }
+
+})();
+</script>
+</body>
+</html>
