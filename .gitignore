@@ -1,0 +1,22 @@
+# Gradle & Android Build Artifacts
+.gradle/
+build/
+app/build/
+*.iml
+.idea/
+local.properties
+.cxx/
+captures/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS / Editor Files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*~

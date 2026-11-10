@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+id = "alex1bc"
+version = "0.1.0"
+name = "Alex1BC"
+tagline = "Your phone becomes a camera rig for Blender"
+maintainer = "Alex1BC"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+network = "Local server for the phone controller"
+files = "Stores a private certificate and the QR image"

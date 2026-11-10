@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#090D17">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<title>Alex1BC</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="gate">
+  <svg class="lens" viewBox="0 0 120 120" aria-hidden="true">
+    <circle cx="60" cy="60" r="54" class="r1"/><circle cx="60" cy="60" r="38" class="r2"/>
+    <circle cx="60" cy="60" r="20" class="r3"/><circle cx="60" cy="60" r="7" class="r4"/>
+    <path d="M60 6v26M60 88v26M6 60h26M88 60h26" class="tick"/>
+  </svg>
+  <h1>Alex1BC</h1>
+  <p class="tag">Your Camera. Your Movement.</p>
+  <p id="gateMsg" class="msg">Open the link from Blender's QR code, or type the code shown in Blender.</p>
+  <input id="code" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="Pairing code" aria-label="Pairing code" hidden>
+  <button id="go" class="primary">Start</button>
+  <p id="gateHint" class="hint" hidden></p>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Alex1BC</div>
+    <button id="camBtn" class="chip" aria-label="Choose camera"><span id="camName">No camera</span><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+    <div class="read"><b id="lensRead">50</b><small>mm</small></div>
+    <div class="read"><b id="frameRead">1</b><small>frame</small></div>
+    <div class="link"><i id="dot"></i><span id="ping">--</span></div>
+  </header>
+
+  <main class="deck">
+    <section class="side">
+      <div class="pair">
+        <div class="stick" id="stickMove" aria-label="Move: forward, back, left, right"><i class="knob"></i><em>MOVE</em></div>
+        <div class="vs" id="rise" aria-label="Rise and lower"><i class="knob"></i><em>UP</em></div>
+      </div>
+    </section>
+
+    <section class="center">
+      <div class="seg" id="modes" role="tablist">
+        <i class="thumb"></i>
+        <button data-m="gyro" role="tab">GYRO</button><button data-m="hybrid" role="tab">HYBRID</button><button data-m="analog" role="tab">ANALOG</button>
+      </div>
+      <button id="rec" class="rec" aria-label="Record"><span class="ring"></span><span class="core"></span><small id="recLbl">REC</small></button>
+      <div class="row">
+        <button id="play" class="btn" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path id="playIcon" d="M8 5v14l11-7z"/></svg><small id="playLbl">PLAY</small></button>
+        <button id="key" class="btn" aria-label="Insert keyframe"><svg viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9z"/></svg><small>KEY</small></button>
+        <button id="home" class="btn" aria-label="Recenter"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><small>HOME</small></button>
+        <button id="hold" class="btn" aria-label="Freeze camera" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><small>HOLD</small></button>
+      </div>
+      <div class="lenses" id="lenses"></div>
+    </section>
+
+    <section class="side">
+      <div class="pair rev">
+        <div class="stick" id="stickLook" aria-label="Look: pan and tilt"><i class="knob"></i><em>LOOK</em></div>
+        <div class="vs" id="zoom" aria-label="Zoom"><i class="knob"></i><em>ZOOM</em></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="banner" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="sheet" hidden><div class="panel" id="sheetList"></div></div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
